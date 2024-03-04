@@ -17,22 +17,34 @@ namespace realtimefraudsystem.Controllers
     [ApiController]
     public class AdminController : ControllerBase
     {
-        private IConfiguration _configuration;
         private readonly DBContext _dbContext;
 
-        public AdminController(IConfiguration configuration, DBContext dBContext)
+        public AdminController(DBContext dBContext)
         {
-            _configuration = configuration;
             _dbContext = dBContext;
+        }
+        [HttpPost("login")]
+        [AllowAnonymous]
+        public async Task<ActionResult<string>> Login(Admin user)
+        {
+            var admin = await _dbContext.Admins.SingleOrDefaultAsync(a => a.Email == user.Email);
+            if (admin == null || !BCrypt.Net.BCrypt.Verify(user.PasswordHash, admin.PasswordHash))
+            {
+                return Unauthorized();
+            }
+
+            var authToken = GenerateJwtToken(admin);
+            return Ok(authToken);
         }
 
         [HttpGet]
+        [Authorize]
         public async Task<ActionResult<IEnumerable<Admin>>> GetAdmins()
         {
             return await _dbContext.Admins.ToListAsync();
         }
 
-        [HttpPost("registerAdmin")]
+        [HttpPost("createAdmin")]
         [AllowAnonymous]
         public async Task<ActionResult<Admin>> Register(Admin user)
         {
@@ -41,6 +53,25 @@ namespace realtimefraudsystem.Controllers
             await _dbContext.SaveChangesAsync();
 
             return Ok("admin created successfully");
+        }
+
+        private string GenerateJwtToken(Admin user)
+        {
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("OWLETTEAMSECURITYKEYISINSAFEHANDS"));
+            var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256Signature);
+
+            var tokenDetails = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new[] { new Claim("id", user.Id.ToString()) }),
+                Expires = DateTime.Now.AddDays(1),
+                SigningCredentials = credentials,
+                Issuer = "FRAUD_SERVER"
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var token = tokenHandler.CreateToken(tokenDetails);
+
+            return tokenHandler.WriteToken(token);
         }
 
     }

@@ -8,5 +8,6 @@ namespace realtimefraudsystem.Models
         {
         }
         public DbSet<Admin> Admins { get; set; }
+        public DbSet<Transaction> AllTransactions { get; set; }
     }
 }
